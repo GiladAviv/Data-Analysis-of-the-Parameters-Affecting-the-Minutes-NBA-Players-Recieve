@@ -1,0 +1,794 @@
+---
+title: "Data Analysis of the Parameters Affecting the Minutes NBA Players Recieve"
+author: "Gilad Aviv, Yedidya Shimon"
+date: "9/2/2021"
+output: html_document
+---
+## Introduction
+The NBA league is the premier basketball league of the US and Canada, and is considered the best basketball league in the world. It is consisted of 30 teams, and close to 700 players. It was founded in New York City on June 6, 1946, as the Basketball Association of America (BAA), and changed its name to the National Basketball Association on August 3, 1949, after merging with the competing National Basketball League (NBL). As of 2020, NBA players are the world's best paid athletes by average annual salary per player.
+The NBA's regular season runs from October to April, with each team playing 82 games. All 30 teams participate in the regular seasons - divided into two conferences: the east conference and west conference, and the 8 top teams in every conference participate in playoff tournament, which extends into June.
+
+The game is played with 5 players in every team, located in the positions: Small Forward, Power Forward, Point Guard, Shooting Guard, and Center. Each game is 48 minutes long.
+Points are earned in several ways:
+1)	2 Point Field Goal – is made when a player throws the ball into the basket from within the 3-point line.
+2)	3 Point Field Goal – is made when a players shoots the ball into the basket from beyond the 3-point line.
+3)	Free Throw – when a player preforms a foul on a player from the opposing team, either when his team has past the 6 foul allowed to their group or when the foul was done while the opposing player was throwing the ball towards the basket, the player on whom the foul was done gets two free throws, which are 1-point worth each. When the foul was committed during a throw that has gotten inside the basket, the player would get only 1 free throw.
+Each NBA team has 12 players, and chooses 5 of them to play on court at any given time.
+
+## Research Aim
+In this work, we aim to check what are the parameters related to a players ability and performance on court that have the biggest correlation to the number of minutes he receives, in average, from his coach.
+We use several statistical parameters, most of them widely used by basketball analytics, to try and predict the number of minutes that players receive.
+
+This question has an importance from several directions:
+First of all, it can help players determine what are the things they should focus on in order to get more minutes on the court. On what they should put effort in their training if they aim to do so.
+Secondly, it can help us analyze the ways in which coaches give minutes in the NBA game, and question or criticize them. 
+Finally, a successful model can be used in the future as a tool to analyze the policies and methods of specific coaches in giving time to their players, by comparing them to such a model, which would represent the general method used for this purpose, by most of the NBA coaches. 
+
+## The Data
+The data we used to examine our question was a "Data Per Player" dataset, from the "NBA Stuffer" website - from this url: https://www.nbastuffer.com/player-stats/.
+The website had a list of "Data Per Player" Datasets, and we chose to use the data from seasons: 2017-2018, 2018-2019, 2019-2020, 2020-2021. We used only these years because they had more columns then previous ones. We combined the datasets, while adding a column indicating the year from which each observation was taken. 
+After combining the datasets, we reached a total of 2048 observations.
+
+```{r notSetup, cache = F, echo = F, message = F, warning = F, tidy = F, }
+knitr::opts_chunk$set(echo = FALSE)
+
+library(ggplot2)
+library(gridExtra)
+library(dplyr)
+library(stringr)
+library(factoextra)
+library(FactoMineR)
+library(tidyr)
+library(pls)
+library(SmartEDA)
+library(tidyverse)
+library(caret)
+library(Rcpp)
+library(caret)
+set.seed(1)
+#data2021<-read.csv("2021-nba.csv",TRUE,",")
+#data2020<-read.csv("2020-nba.csv",TRUE,",")
+#data2019<-read.csv("2019-nba.csv",TRUE,",")
+#data2018<-read.csv("2018-nba.csv",TRUE,",")
+load("DataForFinalProject.RData")
+data2018<-data2018[-1]
+data2018$TOr<-data2018$TOr*100 #fixing the units of TOr which were a houndered times smaller in 2017-2018
+
+names<-c("FULL NAME","TEAM","POS","AGE","GP","MPG","MINp","USGp","TOr","FTA","FTp","twoPA","twoPp","threePA","threePp","eFGp","TSp","PPG","RPG","TRBp","APG","ASTp","SPG","BPG","TOPG","VI","ORTG","DRTG","year")
+
+
+year2021<-rep(2021,626)
+year2020<-rep(2020,591)
+year2019<-rep(2019,622)
+year2018<-rep(2018,209)
+
+data2021<-cbind(data2021,year2021)
+
+data2020<-cbind(data2020,year2020)
+
+data2019<-cbind(data2019,year2019)
+
+data2018<-cbind(data2018,year2018)
+
+
+colnames(data2021)<-names
+
+colnames(data2020)<-names
+
+colnames(data2019)<-names
+
+colnames(data2018)<-names
+
+nbaData<-rbind(data2021,data2020,data2019,data2018)
+```
+
+The data included the following columns:
+
+TEAM-The team that the player played for.
+
+POS-The position the player plays.
+
+AGE-The age of the player.
+
+GP-The number of games the player played in the season.
+
+MPG-The number of minutes the player played per game.
+
+MIN%- Percentage of team minutes used by a player while he was on the floor.
+
+USG%-Usage rate, a.k.a., usage percentage is an estimate of the percentage of team plays used by a player while he was on the floor.
+
+TO%-A metric that estimates the number of turnovers a player commits per 100 possessions.
+
+FTA-The free throw attempt player had per game on average.
+
+FT%-the percentage of successful free throws.
+
+2PA-number of 2 point shots the player attempted in the season.
+
+2P%- the percentage of successful 2-point shots.
+
+3PA-number of 3 point shots the player attempted in the season.
+
+3P%- the percentage of successful 3-point shots.
+
+eFG%- effective field goal percentage. With eFG%, three-point shots made are worth 50% more than two-point shots made. its' formula is(Field Goals Made + (0.5 x 3 Points made))/Field Goal attempts.
+
+TS%-True shooting percentage is a measure of shooting efficiency that takes into account field goals, 3-point field goals, and free throws.
+
+PPG-Points per game.
+
+RPG-Rebounds per game.
+
+TRB%- Total rebound percentage is estimated percentage of available rebounds grabbed by the player while the player is on the court.
+
+APG-Assists per game. Assists are situations were a player passes the ball, and the player receiving immediately scores a basket.
+
+AST%-Assist percentage is an estimated percentage of teammate field goals a player assisted while the player is on the court.
+
+SPG-Steals per game.
+
+BPG-Blocks per game.
+
+TOPG-Turnovers per game.
+
+VI-Versatility index is a metric that measures a players ability to produce in points, assists, and rebounds. The average player will score around a five on the index, while top players score above 10.
+
+ORTG-Individual offensive rating is the number of points produced by a player per 100 total individual possessions.
+
+DRTG-Individual defensive rating estimates how many points the player allowed per 100 possessions he individually faced while staying on the court.
+
+NOTE: % was turned into the letter p, and numbers were turned from actual digits (2,3..) to words (two, three).
+
+We should raise to attention that as for position ("POS"), the datasets did not always distinguish between shooting guards and point guards, and between small forwards and power forwards, but rather gave them sometimes the same titles of simply "guards" ("G") and "forwards" ("F"). There were also players who played more than one position. We usually included them in both groups of players. 
+
+
+
+We chose to create new columns, which showed the number of achievements (points, rebounds, etc.) per 36 minutes. In that way the columns would describe the net performance of the players during an equal amount of time, and cancel the straight dependency in the amount of time played. We named those columns: per36APG, per36PPG, per36BPG, per36TOPG, per36SPG, per36RPG.
+Columns describing statistics which were per season we have normalized to be per 36 minutes and 50 games. We renames them with the suffix "per50gamesper36minutes".
+
+```{r, cache = F, echo = F, message = F, warning = F, tidy = F}
+
+nbaData1<-nbaData#saving a copy of the data before adding further columns.
+
+per36APG<-(nbaData$APG/nbaData$MPG)*36
+per36PPG<-(nbaData$PPG/nbaData$MPG)*36
+per36BPG<-(nbaData$BPG/nbaData$MPG)*36
+per36TOPG<-(nbaData$TOPG/nbaData$MPG)*36
+per36SPG<-(nbaData$SPG/nbaData$MPG)*36
+per36RPG<-(nbaData$RPG/nbaData$MPG)*36
+
+twoPAper50gamesper36minute<-(nbaData$`twoPA`*(50/nbaData$GP))*(36/nbaData$MPG)
+threePAper50gamesper36minute<-(nbaData$`threePA`*(50/nbaData$GP))*(36/nbaData$MPG)
+FTAper50gamesper36minute<-(nbaData$FTA*(50/nbaData$GP))*(36/nbaData$MPG)
+
+nbaData<-cbind(nbaData %>% select(-"APG",-"PPG",-"BPG",-"TOPG",-"SPG",-"RPG",-"twoPA",-"threePA",-"FTA"),per36APG,per36PPG,per36BPG,per36TOPG,per36SPG,per36RPG,twoPAper50gamesper36minute,threePAper50gamesper36minute,FTAper50gamesper36minute)
+```
+We examined the number of observations with NA's in some of the columns. There were around 100 observation (5% of the data) who lacked data in both the DRTG & ORTG columns. We could either take the columns out, take 5% of our data, or assign the average values in these columns instead of the NA. We decided that since we have few columns which describe defensive statistics, we do not want to give away the DRTG column. Since we also did not want to harm our model, we finally filtered the non-complete observations from the data, ending up with 104 observations.
+```{r NA, cache = F, echo = F, message = F, warning = F, tidy = F}
+##Table summarizing the DATA, and checking also the number of observations with NA's in part of the parameters
+EDATable<-ExpNumStat(nbaData,by="A",gp=NULL,Qnt=seq(0,1,0.1),MesofShape=2,Outlier=TRUE,round=2,Nlim=10)
+#deciding to remove uncopmlete cases
+nbaData<-nbaData[nbaData%>%complete.cases(),]
+########
+```
+
+## Exploratory data analysis (EDA)
+### Density Plot
+We first analyzed the distribution of each column values in the data. We created for that a density plot which represents the distribution of numeric variables. The graph uses a kernel density estimate to show the probability density function of the variable.
+
+```{r density plots, cache = F, echo = F, message = F, warning = F, tidy = F}
+##distribution graphs
+plot1 <- ExpNumViz(nbaData,Page = c(4,4), gtitle = "Denstiy Plots: ")
+plot1[[1]]
+
+```
+We will mention some observations here: the big majority of the columns have a "classic" distribution structure - a lot in middle, a little bit on the sides. Some are kind of "cut" on the low edge since they cannot get negative values. But, there are some exceptions:
+
+1. GP - interestingly, the number of games played has two peaks. This indicates a group of players that played quite a lot of games, and a differentiated group of players who played in a small number of games.
+
+2. MPG - our predicted variable - has a very wide peak, and does not seem normally distributed at all.
+We also tested this conclusion with the Shapiro-Wilk normality test, which has a null-hypothesis of a normal distribution, and alternative hypothesis of a non-normally distributed variable. We received a p-value smaller than 10^-15, which certainly implies a non normal distribution.
+```{r echo=FALSE}
+shapiro.test(nbaData$MPG)
+```
+
+3. MINp and MPG have similar distribution. That is quite anticipated since MPG is minutes per game, and MINp is MIN-percent - percentage of minutes out of the total minutes played by the team. We of course don't want MINp to be used as a predictor in our model.
+4. ThreePp - also has two peaks, indicating that there are three point shooters and non-three-point shooters.
+It therefor might be hard to predict based on the 3-point performance, since there are two groups of players that might have different dependency in the 3-point statistics.
+### Scatter plot - MPG vs othe columns
+
+We created a function that builds a graph of mpg vs. every other parameter separately.
+
+First we wanted to use it to create graphs that included all our data. When we first looked at the graphs we saw that there are several outliers. We figured out that they are consisted mainly of players that were less active during the season, and painted those in red.
+The players we highlighted are players with either less then 5 games played, 2 minutes in average, or 0 successful 2-point shots.
+We also added a trend line to each graph.
+```{r echo=F, fig.height=8, fig.width=10, message=FALSE, warning=FALSE, cache=FALSE, tidy= FALSE}
+eda3<-function(data,ti,a)
+{
+
+  ppgim<-ggplot(data,aes(x=per36PPG,y=MPG))+geom_point(alpha=a, aes(color = Color))+  scale_color_identity()+geom_smooth(method=lm)
+  apgim<-ggplot(data,aes(x=per36APG,y=MPG))+geom_point(alpha=a, aes(color = Color))+  scale_color_identity()+geom_smooth(method=lm)
+  bpgim<-ggplot(data,aes(x=per36BPG,y=MPG))+geom_point(alpha=a, aes(color = Color))+  scale_color_identity()+geom_smooth(method=lm)
+  topgim<-ggplot(data,aes(x=per36TOPG,y=MPG))+geom_point(alpha=a, aes(color = Color))+  scale_color_identity()+geom_smooth(method=lm)
+  usgim<-ggplot(data,aes(x=`USGp`,y=MPG))+geom_point(alpha=a, aes(color = Color))+  scale_color_identity()+geom_smooth(method=lm)
+  torim<-ggplot(data,aes(x=TOr,y=MPG))+geom_point(alpha=a, aes(color = Color))+  scale_color_identity()+geom_smooth(method=lm)
+  twoPAper50gamesper36minuteim<-ggplot(data,aes(x=twoPAper50gamesper36minute,y=MPG))+geom_point(alpha=a, aes(color = Color))+  scale_color_identity()+geom_smooth(method=lm)
+  threePAper50gamesper36minuteim<-ggplot(data,aes(x=threePAper50gamesper36minute,y=MPG))+geom_point(alpha=a, aes(color = Color))+  scale_color_identity()+geom_smooth(method=lm)
+  FTAper50gamesper36minuteim<-ggplot(data,aes(x=FTAper50gamesper36minute,y=MPG))+geom_point(alpha=a, aes(color = Color))+  scale_color_identity()+geom_smooth(method=lm)
+  DRTGim<-ggplot(data,aes(x=DRTG,y=MPG))+geom_point(alpha=a, aes(color = Color))+  scale_color_identity()+geom_smooth(method=lm)
+  per36RPGim<-ggplot(data,aes(x=per36RPG,y=MPG))+geom_point(alpha=a, aes(color = Color))+  scale_color_identity()+geom_smooth(method=lm)
+  per36SPGim<-ggplot(data,aes(x=per36SPG,y=MPG))+geom_point(alpha=a, aes(color = Color))+  scale_color_identity()+geom_smooth(method=lm)
+  ORTGim<-ggplot(data,aes(x=ORTG,y=MPG))+geom_point(alpha=a, aes(color = Color))+  scale_color_identity()+geom_smooth(method=lm)
+  VIim<-ggplot(data,aes(x=VI,y=MPG))+geom_point(alpha=a, aes(color = Color))+  scale_color_identity()+geom_smooth(method=lm)
+  `ASTp`<-ggplot(data,aes(x=`ASTp`,y=MPG))+geom_point(alpha=a, aes(color = Color))+  scale_color_identity()+geom_smooth(method=lm)
+  `TRBp`<-ggplot(data,aes(x=`TRBp`,y=MPG))+geom_point(alpha=a, aes(color = Color))+  scale_color_identity()+geom_smooth(method=lm)
+  `TSp`<-ggplot(data,aes(x=`TSp`,y=MPG))+geom_point(alpha=a, aes(color = Color))+  scale_color_identity()+geom_smooth(method=lm)
+  `eFGp`<-ggplot(data,aes(x=`eFGp`,y=MPG))+geom_point(alpha=a, aes(color = Color))+  scale_color_identity()+geom_smooth(method=lm)
+  `threePp`<-ggplot(data,aes(x=`threePp`,y=MPG))+geom_point(alpha=a, aes(color = Color))+  scale_color_identity()+geom_smooth(method=lm)
+  `twoPp`<-ggplot(data,aes(x=`twoPp`,y=MPG))+geom_point(alpha=a, aes(color = Color))+  scale_color_identity()+geom_smooth(method=lm)
+  `FTp`<-ggplot(data,aes(x=`FTp`,y=MPG))+geom_point(alpha=a, aes(color = Color))+  scale_color_identity()+geom_smooth(method=lm)
+  ageim<-ggplot(data,aes(x=AGE,y=MPG))+geom_point(alpha=a, aes(color = Color))+  scale_color_identity()+geom_smooth(method=lm)
+  
+  lay <- rbind(c(1,2,3,4),
+             c(5,6,7,8),
+             c(9,10,11,12),
+             c(13,14,15,16),
+             c(17,18,19,20),
+             c(21,22,23,24))
+  grid.arrange(ppgim,apgim,bpgim,topgim,usgim,torim,twoPAper50gamesper36minuteim,
+               threePAper50gamesper36minuteim, FTAper50gamesper36minuteim,per36RPGim,DRTGim,per36SPGim,ORTGim,
+               VIim,`ASTp`,`TRBp`,`TSp`,`eFGp`,`threePp`,`twoPp`,`FTp`,ageim,top=ti,layout_matrix=lay)
+  
+}
+
+
+#adding colors for scatterplot. The colors represent the observation we are considering to filter out of the data
+nbaData2<-nbaData%>%mutate(Color = ifelse((GP > 4 & MPG > 2 & twoPp > 0), "green", "red"))
+#plot - considering filtering our data
+eda3(nbaData2, ti = "the Relation Between the Different Parameters And MPG, for Unfiltered DATA",a=0.3)
+```
+  
+We assume the reason for those bold outliers are is that a player who played less than 5 games a season had his performance during those time with a significant amount of contingency since it was not averaged on a significant amount of time. Same with a player who played less than 2 minutes on average per season. 
+
+This can also be due to whats called "garbage time". Garbage time is the final moments or minutes of a game in which one side has an insurmountable lead and the players no longer make an effort. Some of the time the players don't even want to score.
+During such a time, also bad players participate in the game, and the team does not aim to play well that much.
+Players with zero 2-point baskets might have played during this time, such players has not scored a single shot for 2 points all season, which is probably due to the fact that they played only in "garbage time".
+
+We should therefor choose to create a model that will fit for the vast majority of the players. These players taken off were 141 observations filterd out.
+```{r filtering, cache = F, echo = F, message = F, warning = F, tidy = F}
+##Filtering, based on what observed in the previous plot
+nbaData<-nbaData[nbaData$GP>4,]
+nbaData<-nbaData[nbaData$MPG>2,]
+nbaData<-nbaData[nbaData$twoPp>0,]
+```
+
+Here we build the same graph for every position, in order to find the relations in different positions, and figure out whether separate models for different position should be more accurate.
+
+```{r scatter_per_position, echo=F, fig.height=8, fig.width=10, message=FALSE, warning=FALSE, cache=FALSE, tidy=F}
+##EDA per position
+#setting the color column (used for the graph) to black
+nbaData3<-nbaData%>%mutate(Color = "black")
+
+eda3(nbaData3[str_detect(nbaData$POS,"C"),],"the relation between the different parameters and mpg for centers",a=0.3)
+```
+Parameters with a positive correlation to the MPG are: per36PPg, per36APG, USGp, DRTG, VI, and ASTp.
+Negative correlation can be seen a bit for TOr, even though it is not that strong.
+
+```{r, echo=F, fig.height=8, fig.width=10, message=FALSE, warning=FALSE, cache=FALSE, tidy=F}
+eda3(nbaData3[str_detect(nbaData$POS,"F"),],"the relation between the different parameters and mpg for forwards",a=0.1)
+```
+For the forwards we see a pretty similar picture: The variables with a positive correlation are - per36PPg, per36APG, USGp, DRTG, VI, and ASTp.
+
+```{r, echo=F, fig.height=8, fig.width=10, message=FALSE, warning=FALSE, cache=FALSE, tidy=F}
+eda3(nbaData3[str_detect(nbaData$POS,"G"),],"the relation between the different parameters and mpg for guards",a=0.1)
+
+```
+For the guards we see a strong positive correlation for the per36PPG and per36APG, per36TOPG, USGp, twoPAper50gamesper36minutes,threePAper50gamesper36minutes. FTAper50gamesper36minute, DRTG, VI, ASTp.
+
+It seems that the different positions share most of the same correlating to MPG parameters, except for some differences - like the correlation to threePAper50gamesper36minutes, that has a stronger correlation to MPG in guards than in forwards and especially more than centers.
+
+### PCA
+
+here we decide to buildsome PCA graphs.
+
+Principal component analysis allows us to summarize and to visualize the information in a data set containing observations described by multiple inter-correlated quantitative variables. Each variable could be considered as a different dimension. 
+ 
+Loading plot:
+in this graph the further away the vectors are from the PC origin, the more influence they have on that PC. Loading plots also hint at how variables correlate with one another: a small angle implies positive correlation, a large one suggests negative correlation, and a 90° angle indicates no correlation between two characteristics.
+from this graph we can see that the parameters- USGp, ASTp, per36PPG and per36TOPG have positive correlation to MPG, and both per36BPG and per36RPG have a low correlation with MPG.
+
+```{r pca_2, cache = F, echo = F, message = F, warning = F, tidy = F}
+
+#deleting column irrelvant to the statisticla analysis (names of players, team, etc.) 
+k<-nbaData[c(-1,-2,-3)] 
+k<-k[complete.cases(k),]
+k<-scale(k,center = TRUE,scale = TRUE)
+
+res.pca <- PCA(k, graph = FALSE)
+fviz_pca_var(res.pca, col.var = "cos2",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), 
+             repel = TRUE, title = "The projection of each column on the 2 major PCA's"
+)
+
+```
+We are considering using PCA for a Regression Model that would predict MPG. therefor, we are interested in checking how significant are small numbers of primary components within our predictors. For that we will use a scree graph.
+
+A scree plot is a graphical tool used in the selection of the number of relevant components or factors to be considered in a principal components analysis.
+
+```{r PCA_analysis, cache = F, echo = F, message = F, warning = F, tidy = F}
+
+
+#examining the effect of pca on the Data, using a scree graph showing the % of Explained variance vs. number of PC
+dataForModel<-nbaData%>% dplyr::select(-"FULL NAME", -"TEAM", -"POS", -"year", -"MINp",-"GP",-"VI",-"eFGp")
+dataForModel<-dataForModel%>%scale(center = TRUE,scale = TRUE)
+par(mar=c(5, 4, 2, 2) + 0.1)
+
+#examining the effect of PCA on the data
+res.pca <- PCA(dataForModel, graph = FALSE)
+fviz_eig(res.pca, addlabels = TRUE, ylim = c(0, 50),main = "Explained variance for different numbers of PCA's taken")
+
+```
+we can see that the first 4 components give us 65.7% of explained variance, which is a significant amount of information, and might allow us to create a good primary component regression. We will further examine this with cross validation when we will get to the inference and create the PCA models.
+
+
+## Inference
+
+We chose to examine four types of models:
+
+1. Linear Regression BIC Model, using Backward Step.
+
+
+2. Linear Regression BIC Model, using Forward Step.
+
+
+3. a well tuned (in choosing the number of components) PCA Regression Module.
+
+
+4. one non-parametric type of module - a well-tuned (using cross-validation) KNN model.
+
+
+Even though the KNN module does not help us understand the way MPG is affected by other statistics, and therefor does not give us any explanatory knowledge, we wanted to compare our parametric models to one type of non-parametric module. This way we could understand how much is a parametric linear approach accurate compared to non-parametric modules.
+
+
+### Models built for the whole data togther
+```{r Creating The model, cache = F, echo = F, message = F, warning = F, tidy = F}
+################### Building The Model #################################
+#1 - step froward step backwards
+#backward
+#library("QuantPsyc")
+
+set.seed(1)
+
+train_idx_all = createDataPartition(nbaData$MPG, p = 0.75, list = FALSE) %>% as.vector()
+
+train_data_all<-nbaData[train_idx_all,] %>% dplyr::select(-"FULL NAME", -"TEAM", -"POS", -"year", -"MINp",-"GP",-"VI",-"eFGp")
+
+NaiveModel_all<-lm(data = train_data_all, formula = MPG ~ .)
+backward_model_all<-step(NaiveModel_all,direction = "backward", k = 1*log(length(resid(NaiveModel_all))),trace=0)
+#forward stepwise regression
+forward_model_all_start = lm(MPG ~ 1, data = train_data_all)
+forward_model_all_final = step(
+  forward_model_all_start, 
+  scope = MPG ~ AGE + USGp + TOr + FTp + twoPp + threePp + TSp + TRBp + ASTp + ORTG + DRTG + per36APG + 
+    per36PPG +per36BPG + per36TOPG + per36SPG + per36RPG + twoPAper50gamesper36minute + threePAper50gamesper36minute + 
+    FTAper50gamesper36minute,
+  direction = "forward", k = 1*log(length(resid(NaiveModel_all))),trace=0)
+
+
+test_data_all<-nbaData[-train_idx_all,] %>% select(-"FULL NAME", -"TEAM", -"POS", -"year", -"MINp",-"GP",-"VI",-"eFGp")
+sd_of_all_test_MPG<-sd(x=test_data_all$MPG)
+#calculate RMSE
+
+pred1 <- predict(backward_model_all,test_data_all[,-2])
+
+RMSEbackall<-sqrt(mean((pred1 -test_data_all[,2])^2))
+
+
+pred2 <- predict(forward_model_all_final,test_data_all[,-2])
+
+RMSEfowall<-sqrt(mean((pred2 -test_data_all[,2])^2))
+
+#3 - with PCA
+
+pcrmodel<-pcr(MPG~AGE + USGp + TOr + FTp + twoPp + threePp + TSp + TRBp + ASTp + ORTG + DRTG + per36APG + 
+                per36PPG +per36BPG + per36TOPG + per36SPG + per36RPG + twoPAper50gamesper36minute + threePAper50gamesper36minute + 
+                FTAper50gamesper36minute, data=nbaData, scale=TRUE, validation="CV")
+
+validationplot(pcrmodel, val.type="MSEP", main = "MSEP as Function of Number of PC's, for a Whole-Data-Model")
+
+
+pcrmpdel_pred <- predict(pcrmodel, test_data_all[,-2], ncomp=3)##We chose the number of components of the
+## pca to include, based on the cross-validation plot that showed the MSEP as function of number of components
+
+
+#calculate RMSE
+RMSEpcaall<-sqrt(mean((pcrmpdel_pred -test_data_all[,2])^2))
+
+
+#4-with knn
+
+Data_knn_scaled_modeloforall<-train(
+  form = MPG ~.,
+  data = train_data_all,
+  method = "knn",
+  trControl = trainControl(method = "cv", number = 5),
+  tuneGrid = expand.grid(k = c(1,5,10,15,20,25,30,35,40,45,50)),
+  preProcess = c("center","scale")
+)
+
+ggplot(Data_knn_scaled_modeloforall) + theme_bw() + ggtitle("Cross-Validated RMSE As Funtion of Number of Neighbers, in a Whole-Data-Model")
+
+
+knnPredictforall <- predict(Data_knn_scaled_modeloforall,newdata = test_data_all )
+
+rmseknnforall<-postResample(pred = knnPredictforall, obs = test_data_all$MPG)[[1]]
+
+
+
+```
+We chose, based on the graphs to take 3 PC's and 10 nearest-neighbors. We chose not to take the optimal number of PC's which was close to 20 because we assumed that a model with a high number of components might be over-fitting. This was our guideline also in the next models we created.
+
+After creating those models built for the whole data, we checked whether splitting our data between position (Guard, Center, Forward), and building separate models for each, would give us more accurate results.
+
+### Models Dedicated for Gaurds
+
+```{r Creating The model - Gaurd, cache = F, echo = F, message = F, warning = F, tidy = F}
+#by position
+
+##G
+
+set.seed(1)
+
+Gdata<-nbaData[str_detect(nbaData$POS,"G"),]
+
+train_idx = createDataPartition(Gdata$MPG, p = 0.75, list = FALSE) %>% as.vector()
+
+train_data<-Gdata[train_idx,] %>% select(-"FULL NAME", -"TEAM", -"POS", -"year", -"MINp",-"GP",-"VI",-"eFGp")
+
+NaiveModel<-lm(data = train_data, formula = MPG ~ .)
+newModelback<-step(NaiveModel,direction = "backward", k = 1*log(length(resid(NaiveModel))),trace=0)
+#forward stepwise regression
+minutes_mod_start = lm(MPG ~ 1, data = train_data)
+minutes_mod_forw_aic = step(
+  minutes_mod_start, 
+  scope = MPG ~ AGE + USGp + TOr + FTp + twoPp + threePp + TSp + TRBp + ASTp + ORTG + DRTG + per36APG + 
+    per36PPG +per36BPG + per36TOPG + per36SPG + per36RPG + twoPAper50gamesper36minute + threePAper50gamesper36minute + 
+    FTAper50gamesper36minute,
+  direction = "forward", k = 1*log(length(resid(NaiveModel))),trace=0)
+
+
+test_data<-Gdata[-train_idx,] %>% select(-"FULL NAME", -"TEAM", -"POS", -"year", -"MINp",-"GP",-"VI",-"eFGp")
+
+#calculate RMSE
+
+pred1 <- predict(newModelback,test_data[,-2])
+
+RMSEbackg<-sqrt(mean((pred1 -test_data[,2])^2))
+
+
+pred2 <- predict(minutes_mod_forw_aic,test_data[,-2])
+
+RMSEfowg<-sqrt(mean((pred2 -test_data[,2])^2))
+
+
+
+
+#3 - with PCA
+
+pcrmodel<-pcr(MPG~AGE + USGp + TOr + FTp + twoPp + threePp + TSp + TRBp + ASTp + ORTG + DRTG + per36APG + 
+                per36PPG +per36BPG + per36TOPG + per36SPG + per36RPG + twoPAper50gamesper36minute + threePAper50gamesper36minute + 
+                FTAper50gamesper36minute, data=Gdata, scale=TRUE, validation="CV")
+
+
+validationplot(pcrmodel, val.type="MSEP", main = "MSEP as Function of Number of PC's, for a Gaurd-Only Model")
+
+
+pcrmpdel_predG <- predict(pcrmodel, test_data[,-2], ncomp=2)
+
+
+#calculate RMSE
+RMSEpcag<-sqrt(mean((pcrmpdel_predG -test_data[,2])^2))
+
+##with knn
+
+Data_knn_scaled_modeloforg<-train(
+  form = MPG ~.,
+  data = train_data,
+  method = "knn",
+  trControl = trainControl(method = "cv", number = 5),
+  tuneGrid = expand.grid(k = c(1,5,10,15,20,25,30,35,40,45,50)),
+  preProcess = c("center","scale")
+)
+
+ggplot(Data_knn_scaled_modeloforg) + theme_bw()  + ggtitle("Cross-Validated RMSE As Funtion of Number of Neighbers, in a Gaurd-Data-Model")
+
+knnPredictforg <- predict(Data_knn_scaled_modeloforg,newdata = test_data )
+
+rmseknnforg<-postResample(pred = knnPredictforg, obs = test_data$MPG)[[1]]
+
+#Model coefficients, after scaling to equal units, of the best model
+
+coef_lmbeta_G <- QuantPsyc::lm.beta(newModelback)
+
+```
+Here we chose 2 PC's, and 10 nearest-neighbors.
+
+### Models Dedicated For forwards
+
+```{r Creating The model - Forward, echo=F, message=FALSE, warning=FALSE, cache=FALSE, tidy= F}
+##F
+set.seed(1)
+
+Fdata<-nbaData[str_detect(nbaData$POS,"F"),]
+
+train_idx = createDataPartition(Fdata$MPG, p = 0.75, list = FALSE) %>% as.vector()
+
+train_data<-Fdata[train_idx,] %>% select(-"FULL NAME", -"TEAM", -"POS", -"year", -"MINp",-"GP",-"VI",-"eFGp")
+
+
+
+NaiveModel<-lm(data = train_data, formula = MPG ~ .)
+newModelback<-step(NaiveModel,direction = "backward", k = 1*log(length(resid(NaiveModel))), trace = 0)
+#forward stepwise regression
+minutes_mod_start = lm(MPG ~ 1, data = train_data)
+minutes_mod_forw_aic = step(
+  minutes_mod_start, 
+  scope = MPG ~ AGE + USGp + TOr + FTp + twoPp + threePp + TSp + TRBp + ASTp + ORTG + DRTG + per36APG + 
+    per36PPG +per36BPG + per36TOPG + per36SPG + per36RPG + twoPAper50gamesper36minute + threePAper50gamesper36minute + 
+    FTAper50gamesper36minute,
+  direction = "forward", k = 1*log(length(resid(NaiveModel))),trace = 0)
+
+
+test_data<-Fdata[-train_idx,] %>% select(-"FULL NAME", -"TEAM", -"POS", -"year", -"MINp",-"GP",-"VI",-"eFGp")
+
+#calculate RMSE
+
+pred1 <- predict(newModelback,test_data[,-2])
+
+RMSEbackf<-sqrt(mean((pred1 -test_data[,2])^2))
+
+
+pred2 <- predict(minutes_mod_forw_aic,test_data[,-2])
+
+RMSEfowf<-sqrt(mean((pred2 -test_data[,2])^2))
+
+
+
+
+#3 - with PCA
+
+pcrmodel<-pcr(MPG~AGE + USGp + TOr + FTp + twoPp + threePp + TSp + TRBp + ASTp + ORTG + DRTG + per36APG + 
+                per36PPG +per36BPG + per36TOPG + per36SPG + per36RPG + twoPAper50gamesper36minute + threePAper50gamesper36minute + 
+                FTAper50gamesper36minute, data=Fdata, scale=TRUE, validation="CV")
+
+
+validationplot(pcrmodel, val.type="MSEP", main = "MSEP as Function of Number of PC's, for a Forwards-Only Model")
+
+
+pcrmpdel_predF <- predict(pcrmodel, test_data[,-2], ncomp=3)
+
+#calculate RMSE
+RMSEpcaf<-sqrt(mean((pcrmpdel_predF -test_data[,2])^2))
+
+##4-with knn
+
+Data_knn_scaled_modelforF<-train(
+  form = MPG ~.,
+  data = train_data,
+  method = "knn",
+  trControl = trainControl(method = "cv", number = 5),
+  tuneGrid = expand.grid(k = c(1,5,10,15,20,25,30,35,40,45,50)),
+  preProcess = c("center","scale")
+)
+SCALED_KNNforF<-Data_knn_scaled_modelforF$finalModel
+
+ggplot(Data_knn_scaled_modelforF) + theme_bw() + ggtitle("Cross-Validated RMSE As Funtion of Number of Neighbers, in a Forwards-Only-Model")
+
+knnPredictforF <- predict(Data_knn_scaled_modelforF,newdata = test_data )
+
+rmseknnforF<-postResample(pred = knnPredictforF, obs = test_data$MPG)[[1]]
+
+
+#Model coefficients, after scaling to equal units
+coef_lmbeta_F <- QuantPsyc::lm.beta(newModelback)
+
+```
+Here we chose 3 PC's and 10 nearest neighbers.
+
+### Models Dedicated For Centers
+
+```{r Creating The model - Center, cache = F, echo = F, message = F, warning = F, tidy = F}
+##C
+set.seed(1)
+
+Cdata<-nbaData[str_detect(nbaData$POS,"C"),]
+
+train_idx = createDataPartition(Cdata$MPG, p = 0.75, list = FALSE) %>% as.vector()
+
+train_data<-Cdata[train_idx,] %>% select(-"FULL NAME", -"TEAM", -"POS", -"year", -"MINp",-"GP",-"VI",-"eFGp")
+
+
+
+NaiveModel<-lm(data = train_data, formula = MPG ~ .)
+newModelback<-step(NaiveModel,direction = "backward", k = 1*log(length(resid(NaiveModel))),trace=0)
+#forward stepwise regression
+minutes_mod_start = lm(MPG ~ 1, data = train_data)
+minutes_mod_forw_aic = step(
+  minutes_mod_start, 
+  scope = MPG ~ AGE + USGp + TOr + FTp + twoPp + threePp + TSp + TRBp + ASTp + ORTG + DRTG + per36APG + 
+    per36PPG +per36BPG + per36TOPG + per36SPG + per36RPG + twoPAper50gamesper36minute + threePAper50gamesper36minute + 
+    FTAper50gamesper36minute,
+  direction = "forward", k = 1*log(length(resid(NaiveModel))),trace=0)
+
+
+test_data<-Cdata[-train_idx,] %>% select(-"FULL NAME", -"TEAM", -"POS", -"year", -"MINp",-"GP",-"VI",-"eFGp")
+
+#calculate RMSE
+
+pred1 <- predict(newModelback,test_data[,-2])
+
+RMSEbackc<-sqrt(mean((pred1 -test_data[,2])^2))
+
+
+pred2 <- predict(minutes_mod_forw_aic,test_data[,-2])
+
+RMSEfowc<-sqrt(mean((pred2 -test_data[,2])^2))
+
+
+
+
+#3 - with PCA
+
+pcrmodel<-pcr(MPG~AGE + USGp + TOr + FTp + twoPp + threePp + TSp + TRBp + ASTp + ORTG + DRTG + per36APG + 
+                per36PPG +per36BPG + per36TOPG + per36SPG + per36RPG + twoPAper50gamesper36minute + threePAper50gamesper36minute + 
+                FTAper50gamesper36minute, data=Cdata, scale=TRUE, validation="CV")
+
+
+validationplot(pcrmodel, val.type="MSEP", main = "MSEP as Function of Number of PC's, for a Centers-Only Model")
+
+#updating the number of components chosen
+pcrmodel<-pcr(MPG~AGE + USGp + TOr + FTp + twoPp + threePp + TSp + TRBp + ASTp + ORTG + DRTG + per36APG + 
+                per36PPG +per36BPG + per36TOPG + per36SPG + per36RPG + twoPAper50gamesper36minute + threePAper50gamesper36minute + 
+                FTAper50gamesper36minute, data=Cdata, scale=TRUE, validation="CV",ncomp=3)
+
+
+pcrmpdel_predC <- predict(pcrmodel, test_data[,-2], ncomp=3)
+
+#calculate RMSE
+RMSEpcac<-sqrt(mean((pcrmpdel_predC -test_data[,2])^2))
+
+#4-with knn
+
+
+Data_knn_scaled_modelforc<-train(
+  form = MPG ~.,
+  data = train_data,
+  method = "knn",
+  trControl = trainControl(method = "cv", number = 5),
+  tuneGrid = expand.grid(k = c(1,5,10,15,20,25,30,35,40,45,50)),
+  preProcess = c("center","scale")
+)
+SCALED_KNNforc<-Data_knn_scaled_modelforc$finalModel
+
+ggplot(Data_knn_scaled_modelforc) + theme_bw() + ggtitle("Cross-Validated RMSE As Funtion of Number of Neighbers, in a Centers-Only-Model")
+
+knnPredictforc <- predict(Data_knn_scaled_modelforc,newdata = test_data )
+
+rmseknnforc<-postResample(pred = knnPredictforc, obs = test_data$MPG)[[1]]
+
+##coefficients
+coef_lmbeta_C_pcr<- coef(pcrmodel)
+
+coef_lmbeta_C_pcr__t_values<-coef((pcrmodel))# %>% as.data.frame()%>% select("t value", "Pr(>|t|)")
+
+```
+Here we chose 3 PC's and 5 nearest neighbors.
+
+### Comparing & Analyzing The Models
+
+Our goal was to create good modules, and try to also explain the connection between the different parameters and our data.
+For that, first of all we wish to compare the different models. We compared the models using our train-test split of the original dataset, and comparing the test-RMSE.
+These were the results:
+```{r analyzing and comparing the models - Center, cache = F, echo = F, message = F, warning = F, tidy = F}
+#creating a table that summerizes the RMSE for the different models. 
+RMSE<-c(sd_of_all_test_MPG,RMSEbackall,RMSEbackg,RMSEbackf,RMSEbackc,RMSEfowall,RMSEfowg,RMSEfowf,RMSEfowc,RMSEpcaall,RMSEpcag,RMSEpcaf,RMSEpcac, rmseknnforall,rmseknnforF,rmseknnforg,rmseknnforc)
+
+name<-c("null hypothesis model","back All","back G","back F","back C","forward All","forward G","forward F","forward C","pca All","pca G","pca F","pca C","knn All","knn F","knn G", "knn C")
+RMSETable<-data.frame(name,RMSE)%>%arrange(RMSE)
+RMSETable
+
+
+```
+
+As we can see, first of all, splitting the models into specific positions proved itself to be successful for all positions. It was a bit less successful for centers. This might be because we did not have enough data to rely on for the centers, as can be seen in the following chart, describing the amount of data we had for each position (note that the different positions sum up to more than the total amount of observations, since there are players who played in more than one position):
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+data.frame(Gaurds = nrow(Gdata),Centers=nrow(Cdata),Forwards=nrow(Fdata),Total=nrow(nbaData))
+```
+It can be seen that there are smaller amounts of centers. After performing a test-train split, we are left with only 75% of these numbers.
+
+To summarize our RMSE comparison:
+
+- For Guards we would use the backward stepwise regression.
+
+- For Forwards we would use the backward stepwise regression too.
+
+- For Centers use the PCA regression model.
+
+### Examining the model parameters
+
+Let's take a look at the coefficients of the best models we have. We saw that for the Guards and Forwards the best model were obtained by backward step regression, and for centers the PC Regression fitted best.
+
+We used the "QuantPsyc" package to get our parameters standardized. That way we were able to compare them to each other, regardless of there units.
+
+The standardized coefficients of the Forwards' forward regression model :
+
+```{r}
+coef_lmbeta_F
+```
+The most significant coefficient is the per36PPG - the number of points scored by a player during 36 minutes of playing. 
+The second most significant coefficient is the per36TOPG - the number of turnovers per 36 minutes of a game - indicating how often does the player loses his ball. It had a negative affect on MPG, as expected. Interestingly, a similar parameter - the TOr - the number of turnovers per 100 possessions, had a positive affect. It seems that the model chose to balance the negative effect assigned to per36TOPG by a smaller, positive coefficient assigned to TOr.
+other important factors are ASTg and DRTG.
+
+
+The standardized coefficients of the Guards' backward regression model :
+
+```{r}
+coef_lmbeta_G
+
+
+```
+The most significant positive coefficients were per36PPG and also ASTp. per36PPG was very significant in relative to all other components.
+Many parameters turned out to be negative, like the two, three and free throw attempts per 50 games of 36 minutes. It seems that by taking a high positive value of the points made by the players, and subtracting the number of attempts, the model reaches some sort of evaluation of the players accuracy in his throws.
+It was quite surprising that the model didn't use instead the 2Pp,3Pp,FTp (2P%, 3P%, FT%) that are the actual percentage of the successful scores. It might be because the backward search doesn't consider all possible models, but rather works in a stepwise fashion. The step algorithm might have taken out at some early stage FT%, for example, and from that point onward, a model based on the FT% was not an option, even though, it might have turned out to be useful when the number of coefficients turned smaller.
+
+The standardized coefficients of the Centers' PCR regression model:
+```{r}
+coef_lmbeta_C_pcr
+```
+per36PPG got the highest positive value. The Attempts of scoring different type of goals received a high mark, too: the - twoPAper50gamesper36minute, threePAper50gamesper36minute, and FTAper50gamesper36minute. This might be because centers are required to be very active, but we rather suggest that this is an outdraw of the usage of PCA for our model: PCA Regression assigns a coefficient to all correlated parameters together. And the number of points scored is highly correlated with the number of attempts - so the attempts received a high coefficient too.
+We should note that in the Guards' model they had a negative affect.
+TOr had a high negative impact, since it represents the number of turnovers per 100 possessions.
+USGp - the amount of usage of the ball during the game had a high impact two. This might also be due to correlation.
+FTp had a high impact, which have not been seen in other models.
+
+For the center the most important factor out of the: twoPp, threePp, FTp (2P%, 3P%, FT%), is the free throw (FT), that got the highest parameter. That is reasonable since the free throws are known to be significant for centers, that often get free throws when they try to approach the basket, and get fouled by the opponent team players.
+
+
+## Conclusion
+
+We have mixed feelings about our findings. The models parameters turned out to be logical and making sense. But, on the other hand, we succeeded to reach an RMSE of 6.29 for the best model. This is while the standard deviation of the MPG parameter is 8.86. We reduce it in about 30%.
+
+What are the reasons for that?
+It seems that this is not because we didn't reach the best parameters for our model. We examined a large number of models, and even a non-parametric model (KNN, which we added in order to understand whether the problem is in the parameters).
+
+We have two other possible explanations for the RMSE:
+
+1. Outliers: Even though we have filtered a big amount of outliers, which were due to players who played small amounts of games or minutes per game and therefor didn't have accurate statistics, there are still outliers that are left in the data. We did not want to apply more aggressive filtering, since we didn't have that much of data, and we didn't want to lose it all.
+
+2. Small amounts of data - at least for the centers. We had only 342 observations of centers, and for other positions around 900. A bigger amount of observation might have allowed us to create better models.
+
+
+3. Parameters we did not have in our data, and also others that might be very hard to measure: There are certain parameters which are very hard to quantify: leadership, chemistry with other group members, commitment to the team, resistance to pressure, optimism in desperate situations, and maybe even the players relationship with his coach. Other parameters we didn't have are also height, fitness, and weight.
+
+As for the parameters we found in our models, we have several conclusions:
+
+1. The number of points a player scores per 36 minutes of playing (per36PPG) was the most important parameter. At the end, the main expectation from a basketball player is to score baskets.
+
+2. Assists (APG) are important parameters in the models. That is true to players in all positions, including centers, despite the common prejudice that centers do not need to pass on balls. It is not only important to score, but also to help others score.
+
+3. Rebounds are not significant parts of any of the 3 best models we reached. We should note that we have seen that already in the PCA Loading plot which we used for EDA.
+
+4. Defense is less important than offense: while the most significant offensive parameter - the amount of points scored received the highest positive impact, our defensive parameters received a relatively low weight in the models. The defensive rating (DSTG) did have a certain impact, but it was always lower than the impact of the points and assists. Blocks - another defensive statistic, didn't have any significant role in any of the models.
+
+For further research we would suggest several ideas and improvements:
+
+1. trying to create models on bigger amounts of data. Especially when splitting into different positions.
+
+2. It could be interesting to compare two separate models: one based on only defensive parameters, and one based on only offensive parameters, in order to further compare the importance of both of them.
+
+
+
+
+
+
